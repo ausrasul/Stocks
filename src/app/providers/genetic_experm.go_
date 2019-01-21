@@ -1,0 +1,305 @@
+package providers
+
+import (
+	"github.com/astaxie/beego"
+	"math"
+	"math/rand"
+	"sort"
+	"sync"
+	"time"
+)
+
+var conf = struct {
+	ChromLen    int
+	Days        int
+	Window      int
+	Xor         int //crossover ratio percent
+	Mur         int //mutation ratio percent
+	Psize       int //Population size
+	Winners     int
+	Generations int
+	Tollerance  float64
+	StopDate    string
+}{
+	ChromLen:    5,
+	Days:        5,
+	Window:      7,
+	Xor:         40,
+	Mur:         40,
+	Psize:       1000000,
+	Winners:     100000,
+	Generations: 5000,
+	Tollerance:  0.3,
+	StopDate:    "2013-12-31",
+}
+
+
+// Representation:
+/*
+	o = open
+	c = close
+	l = low
+	h = high
+	x = last close
+	Genome: [o-c o-c o-c x-o limit stoploss timeout]
+	Genome: [[0 1 1 0.002 1.02 0.8 40]
+	          ^ ^ ^   ^    ^     ^   ^
+	          | | |   |    |     |   |__40 days timeout
+	          | | |   |    |     |__Stop loss on -20%
+	          | | |   |    |__sell limit 2%
+	          | | |   |__today open 0.2% lower than yesterday close
+	          | | |__ day ago blue (0 white, 1 blue, 2 don't care)
+	          | |__ two days ago blue
+	          |__ three days ago white
+
+*/
+type Chromosom struct {
+	g0 int //o-c
+	g1 int //o-c
+	g2 int //o-c
+	g3 float64 //x-o
+	g4 float64 //limit
+	g5 float64 //stoploss
+	g6 int // timeout days
+	Fit float64
+}
+
+func NewChromosom() Chromosom{
+	c = Chromosom{}
+	c.g0 = rand.Intn(3)
+	c.g1 = rand.Intn(3)
+	c.g2 = rand.Intn(3)
+	c.g3 = rand.Float64() + 0.5
+	c.g4 = (rand.Float64() / 10) + 1
+	c.g5 = rand.Float64()
+	c.g6 = rand.Intn(50)
+	c.Fit = 0
+	return c
+}
+func (cLoser *Chromosom) CrossOver(cWinner){
+	if rand.Intn(100) < conf.Xor {
+		cLoser.g0 = cWinner.g0
+	}
+	if rand.Intn(100) < conf.Xor {
+		cLoser.g1 = cWinner.g1
+	}
+	if rand.Intn(100) < conf.Xor {
+		cLoser.g2 = cWinner.g2
+	}
+	if rand.Intn(100) < conf.Xor {
+		cLoser.g3 = cWinner.g3
+	}
+	if rand.Intn(100) < conf.Xor {
+		cLoser.g4 = cWinner.g4
+	}
+	if rand.Intn(100) < conf.Xor {
+		cLoser.g5 = cWinner.g5
+	}
+	if rand.Intn(100) < conf.Xor {
+		cLoser.g5 = cWinner.g6
+	}
+}
+func (c *Chromosom) Mutate(){
+	if rand.Intn(100) < conf.Mur {
+		c.g0 = rand.Intn(3)
+	}
+	if rand.Intn(100) < conf.Mur {
+		c.g1 = rand.Intn(3)
+	}
+	if rand.Intn(100) < conf.Mur {
+		c.g2 = rand.Intn(3)
+	}
+	if rand.Intn(100) < conf.Mur {
+		c.g3 = rand.Float64() + 0.5
+	}
+	if rand.Intn(100) < conf.Mur {
+		c.g4 = (rand.Float64() / 10) + 1
+	}
+	if rand.Intn(100) < conf.Mur {
+		c.g5 = rand.Float64()
+	}
+	if rand.Intn(100) < conf.Mur {
+		c.g5 = rand.Intn(50)
+	}
+}
+
+
+type Data struct {
+	Chrom  []Chromosom
+	Prices []DayPrice
+}
+
+type ByFitness []Chromosom
+
+func (s ByFitness) Len() int {
+	return len(s)
+}
+func (s ByFitness) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
+}
+func (s ByFitness) Less(i, j int) bool {
+	return s[i].Fit > s[j].Fit
+}
+
+func Evolve(code string) {
+	var wg sync.WaitGroup
+
+	h := StockHistoryPrice{
+		Code:   code,
+		Prices: make(map[string]DayPrice),
+	}
+	err := h.Get()
+	if err != nil {
+		beego.Critical(err)
+		return
+	}
+	stopDate, err := time.Parse("2006-01-02", conf.StopDate)
+	if err != nil {
+		beego.Critical(err)
+		return
+	}
+	err = h.SortUntil(stopDate)
+	if err != nil {
+		beego.Critical(err)
+		return
+	}
+
+	rand.Seed(time.Now().UnixNano())
+	var population = make([]Chromosom, conf.Psize)
+	for k, _ := range population {
+		population[k] = NewChromosom()
+	}
+	data := representData(h.sortedPrices)
+	for i := 0; i < conf.Generations; i++ {
+		beego.Debug("Testing generation ", i)
+		for k, _ := range population {
+			wg.Add(1)
+			go fitness(&population[k], data, &wg)
+		}
+		wg.Wait()
+
+		sort.Sort(ByFitness(population))
+		beego.Debug("Top 10:")
+		for c := 0; c < 10; c++ {
+			beego.Debug("#", c, ": Fitness=>", population[c].Fit)
+			pop := population[c]
+			beego.Debug("Genes=>", pop.g0, " ", pop.g1, " ", pop.g2, " ", pop.g3, " ", pop.g4, " ", pop.g5, " ", pop.g6)
+		}
+		for k, _ := range population {
+			if k > conf.Winners {
+				winner := k - conf.Winners
+				looser := k
+				//if population[winner].Fit > 0 {
+				if k < (conf.Winners * 2) {
+					population[looser].CrossOver(population[winner])
+				}
+				population[looser].Mutate()
+			}
+		}
+	}
+	beego.Debug("Evolution complete.")
+}
+
+func representData(p []DayPrice) Data {
+	// Set the test limit
+	limit := len(p) - conf.Window
+	start := conf.Days
+	var data Data
+	data.Chrom = make([]Chromosome, len(p))
+
+	// Test the chromosome on each day (sliding window)
+	for i := start; i < limit; i++ {
+		// Cast the prices from the selected window into a chromosome for comparision
+		st := Chromosom{}
+		// this part is very custom due to our selection of data representation
+		k := 0
+		for j := i - conf.Days; j < i; j++ {
+			
+			var diff float64
+			/*			var nextDayUp float64
+						var avgToday float64
+						var opTomor float64
+						var ocRatio  float64
+						avgToday = (p[j].Close + p[j].Open) / 2
+						opTomor = p[j+1].Open
+						nextDayUp = (opTomor/avgToday - 1) * 100
+						ocRatio = ((p[j].Close / p[j].Open) - 1) * 100
+						st.Genes[k] = ocRatio // positive is white
+						k++
+						st.Genes[k] = nextDayUp // positive is next day higher
+						k++ */
+			diff = (p[i].Close/p[j].Open - 1) * 100
+			st.Genes[k] = diff
+		}
+		data.Chrom[i] = st
+	}
+	data.Prices = p
+	return data
+}
+
+func fitness(a *Chromosome, p Data, wg *sync.WaitGroup) {
+	// Set the test limit
+	limit := len(p.Prices) - conf.Window
+	start := conf.Days
+
+	// and reset this chromosome score
+	a.Fit = 0
+	a.Hits = 0
+	a.Losses = 0
+	//allGood := true
+
+	// Test the chromosome on each day (sliding window)
+	for i := start; i < limit; i++ {
+		match := true // initialization
+		// Compare the casted chromosome vs. the tested one.
+		for j := 0; j < conf.ChromLen; j++ {
+			if math.Abs(a.Genes[j]-p.Chrom[i].Genes[j]) >= conf.Tollerance && a.Genes[j] < 10 { //Gene >= 10 is Don't Care
+				//if a.Genes[j] != p.Chrom[i].Genes[j] && a.Genes[j] != 2 { // Gene = 2 is Don't Care
+				match = false
+			}
+			//}
+		}
+
+		if !match {
+			continue
+		}
+		target := p.Prices[i+1].Open * 1.02
+		loss := true // initialization
+		a.Hits = a.Hits + 1
+		// we have a match.
+		// find if this match can make profit in 5 days.
+		for k := 1; k < conf.Window; k++ {
+			if p.Prices[k+i].High >= target {
+				loss = false
+				a.Fit = a.Fit + 1
+				break
+			}
+		}
+		if loss {
+			//allGood = false
+			a.Losses = a.Losses + 1
+		}
+	}
+	a.Fit = a.Fit - (a.Losses * 7)
+	/*if !allGood && a.Losses > (a.Hits*conf.Tollerance) {
+		a.Fit = 0
+	}*/
+	wg.Done()
+}
+
+func crossOver(a, b *Chromosome) {
+	for k, _ := range a.Genes {
+		if rand.Intn(100) < conf.Xor {
+			b.Genes[k] = a.Genes[k]
+		}
+	}
+}
+
+func mutate(c *Chromosome) {
+	for k, _ := range c.Genes {
+		if rand.Intn(100) < conf.Mur {
+			//c.Genes[k] = rand.Intn(3)
+			c.Genes[k] = (rand.Float64() * 24) - 12
+		}
+	}
+}

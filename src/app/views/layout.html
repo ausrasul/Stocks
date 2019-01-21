@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html style="height: 100%">
+	<head>
+		<meta charset="utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<meta name="description" content="Stock Picker">
+		<meta name="author" content="Aus Rasul">
+		<title>Stock Picker</title>
+
+		<!-- outsourced css -->
+		<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.4.0/css/font-awesome.min.css" rel="stylesheet" type="text/css">
+		<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+		<!-- inhouse css -->
+		<link rel="stylesheet" href="/public/css/base.css">	
+		<!-- outsourced scripts -->
+		<script src="//code.jquery.com/jquery-latest.min.js"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/0.97.1/js/materialize.min.js"></script>
+
+		<script src="http://code.highcharts.com/stock/highstock.js"></script>
+		<script src="http://code.highcharts.com/stock/modules/exporting.js"></script>
+		<!-- inhouse js -->
+		<script src="/public/js/base.js"></script>
+		<script src="/public/js/start.js"></script>
+		
+	</head>
+	<body style="height: 100%">
+		<div class="navbar-fixed">
+			<nav>
+				<div class="nav-wrapper">
+					<a href="/" class="brand-logo">StockPicker</a>
+					<a href="#" data-activates="mobile-demo" class="button-collapse"><i class="material-icons">menu</i></a>
+					
+					<ul class="right hide-on-med-and-down">
+						<li><a class="waves-effect waves-light btn modal-trigger" href="#modal1">Rules</a></li>
+						<li><a class="waves-effect waves-light btn" href="/secure/degiro" target="_blank">Degiro</a></li>
+						{{if .Admin}}
+						<li><a class="waves-effect waves-light btn modal-trigger" href="#modal2">Add Stock</a></li>
+						<li><a onClick="runCustom()" class="waves-effect waves-light btn" href="#">Run()</a></li>
+						<li><a onClick="syncStocks()" class="waves-effect waves-light btn modal-trigger" href="#modal3">Sync</a></li>
+						<li><a onClick="forecast()" class="waves-effect waves-light btn modal-trigger" href="#modal4">Forecast</a></li>
+						<li><a onClick="getSignal()" class="waves-effect waves-light btn modal-trigger" href="#modal5">Get Signal</a></li>
+						<li><a onClick="analyzeHistory()" class="waves-effect waves-light btn modal-trigger" href="#modal6">Analyze History</a></li>
+						{{end}}
+						<li><a class="waves-effect waves-light btn modal-trigger" href="#modal7">Show Portfolio</a></li>
+					</ul>
+					<ul class="side-nav" id="mobile-demo">
+						<li><a class="waves-effect waves-light modal-trigger" href="#modal1">Rules</a></li>
+						<li><a class="waves-effect waves-light" href="/secure/degiro" target="_blank">Degiro</a></li>
+						{{if .Admin}}
+						<li><a class="waves-effect waves-light modal-trigger" href="#modal2">Add Stock</a></li>
+						<li><a onClick="runCustom()" class="waves-effect waves-light" href="#">Run()</a></li>
+						<li><a onClick="syncStocks()" class="waves-effect waves-light modal-trigger" href="#modal3">Sync</a></li>
+						<li><a onClick="forecast()" class="waves-effect waves-light modal-trigger" href="#modal4">Forecast</a></li>
+						<li><a onClick="getSignal()" class="waves-effect waves-light modal-trigger" href="#modal5">Get Signal</a></li>
+						<li><a onClick="analyzeHistory()" class="waves-effect waves-light modal-trigger" href="#modal6">Analyze History</a></li>
+						{{end}}
+					</ul>
+				</div>
+			</nav>
+		</div>
+		<div id="contentHere" style="height: 90%; width: 100%">
+		{{.LayoutContent}}	
+		</div>
+		
+		<!--             Modals              -->
+
+		<!-- Rules modal -->
+		<div id="modal1" class="modal">
+    		<div class="modal-content ">
+				<div class="valign-wrapper" style="color: #ee6e73; font-weight: 200;">
+					<i class="material-icons medium">warning</i><span style="font-size: -webkit-xxx-large" class="valign">Rules</span>
+				</div>
+				<p>Description of the stock table:</p>
+				<ul>
+					<li><b>Speed:</b> Average time from when the stock got a buy signal until it realized 2% profit. Not so useful.</li>
+					<li><b>Accuracy:</b> Number of realized 2% profits devided by the total number of buy signals. higher is better.</li>
+					<li><b>Signal:</b> Buy signal, if it says Buy for max xx.xx, then do what it says, but look out for the following:
+						<ul>
+							<li>The stock price should not have made it 2% up since market opened</li>
+							<li>Never buy for more than the recommended price</li>
+						</ul>
+					</li>
+				</ul>
+				<h4>Rules:</h4>
+				<ul class="collapsible" data-collapsible="accordion">
+					<li>
+						<div class="collapsible-header">Rule #1 Wait until 9:30</div>
+						<div class="collapsible-body"><p>Start your day at 9:30, not 9:00, this is because we're unable to get realtime data for free, and besides the first half an hour is unstable.</p></div>
+					</li>
+					<li>
+						<div class="collapsible-header">Rule #2 Don't buy more than one stock a day</div>
+						<div class="collapsible-body"><p>An unpredictable market crash tends to affect different stocks on the same day. Reduce your losses.</p></div>
+					</li>
+					<li>
+						<div class="collapsible-header">Rule #3 Stoploss 20-40</div>
+						<div class="collapsible-body"><p>Your stoploss limits are 20% loss or no profit for 40 working days whichever comes first.</p></div>
+					</li>
+					<li>
+						<div class="collapsible-header">Rule #4 Split your portforlio into 10 parts</div>
+						<div class="collapsible-body"><p>This will reduce your profits per day, but also reduces your risks dramatically. Since we have a harsh stoploss, this is the only way to manage the risk.</p></div>
+					</li>
+					<li>
+						<div class="collapsible-header">Rule #5 Buy only with the recommeded price</div>
+						<div class="collapsible-body"><p>Never put an order higher than the recommeded price.</p></div>
+					</li>
+					<li>
+						<div class="collapsible-header">Rule #6 Only 2%, nothing more</div>
+						<div class="collapsible-body"><p>Even if you buy for less than the recommended price, you should ALWAYS put sell order for 2% over the price you bought for.</p></div>
+					</li>
+					<li>
+						<div class="collapsible-header">Rule #6 2016 and 2017, No oil, No China</div>
+						<div class="collapsible-body"><p>Avoid Oil companies and Chinese companies, those are run by crazy people.</p></div>
+					</li>
+					<li>
+						<div class="collapsible-header">Rule #7 Don't Dollar Average!</div>
+						<div class="collapsible-body"><p>If you buy a stock and it continues to go down, don't buy more when it is very low, it will only delay your stoploss.</p></div>
+					</li>
+					<li>
+						<div class="collapsible-header">Rule #8 Don't buy when there are news</div>
+						<div class="collapsible-body"><p>Before placing an order, check if there is any news fuss about that stock (Reports, Press Relase, etc), defining which news that matter is up to you. Personally I don't think analysis blogs and market summaries are show stoppers</p></div>
+					</li>
+					<li>
+						<div class="collapsible-header">Rule #9 Good broker and ISK account</div>
+						<div class="collapsible-body"><p>Courtage cost and profit regular tax will eat up to 50% of profits when calculationg a 100K investment (done the math). Choose Degiro with ISK account.</p></div>
+					</li>
+					<li>
+						<div class="collapsible-header">Rule #10 High accuracy is not everything</div>
+						<div class="collapsible-body"><p>The number of signals per stock is more important, then the number of successful signals of course.</p></div>
+					</li>
+				</ul>
+				
+				
+    		</div>
+			<div class="modal-footer">
+				<a href="#!" class=" modal-action modal-close waves-effect waves-green btn-flat">Agree</a>
+			</div>
+		</div>
+		
+		<!-- Add stock modal and form -->
+		<div id="modal2" class="modal">
+    		<div class="modal-content">
+				<div class="row">
+    				<form class="col s12">
+      					<div class="row">
+							<div class="input-field col s6">
+								<input placeholder="Tele2 B" id="name" type="text" class="validate">
+								<label for="name">Stock Name</label>
+							</div>
+							<div class="input-field col s6">
+								<input placeholder="SSE1027" id="code" type="text" class="validate">
+								<label for="code">Instrument Code</label>
+							</div>
+						</div>
+					</form>
+				</div>
+    		</div>
+			<div class="modal-footer">
+				<a onClick="addStock()" href="#!" class=" modal-action modal-close waves-effect waves-green btn-flat">Submit</a>
+				<a href="#!" class=" modal-action modal-close waves-effect waves-green btn-flat">Cancel</a>
+			</div>
+		</div>
+
+		<!-- Sync stock modal with progress bar -->
+		<div id="modal3" class="modal">
+			<div class="modal-content">
+				<div class="row">
+					<form class="col s12">
+						<div class="row">
+							<div class="input-field col s12">
+								<h4 class="center-align" style="color: #ee6e73; font-weight: 200;">Fetching stock data from NasdaqNordic...</h4>
+							</div>
+							<div class="input-field col s12 center-align">
+								<div class="preloader-wrapper big active">
+									<div class="spinner-layer spinner-blue">
+										<div class="circle-clipper left">
+											<div class="circle"></div>
+										</div><div class="gap-patch">
+										<div class="circle"></div>
+										</div><div class="circle-clipper right">
+										<div class="circle"></div>
+										</div>
+									</div>
+
+									<div class="spinner-layer spinner-red">
+										<div class="circle-clipper left">
+											<div class="circle"></div>
+										</div><div class="gap-patch">
+										<div class="circle"></div>
+										</div><div class="circle-clipper right">
+										<div class="circle"></div>
+										</div>
+									</div>
+
+									<div class="spinner-layer spinner-yellow">
+										<div class="circle-clipper left">
+											<div class="circle"></div>
+										</div><div class="gap-patch">
+										<div class="circle"></div>
+										</div><div class="circle-clipper right">
+										<div class="circle"></div>
+										</div>
+									</div>
+
+									<div class="spinner-layer spinner-green">
+										<div class="circle-clipper left">
+											<div class="circle"></div>
+										</div><div class="gap-patch">
+										<div class="circle"></div>
+										</div><div class="circle-clipper right">
+										<div class="circle"></div>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+					</form>
+				</div>
+    		</div>
+		</div>
+		<!-- forcast stock modal with progress bar -->
+		<div id="modal4" class="modal">
+			<div class="modal-content">
+				<div class="row">
+					<form class="col s12">
+						<div class="row">
+							<div class="input-field col s12">
+								<h4 class="center-align" style="color: #ee6e73; font-weight: 200;">Getting candidate stocks for tomorrow...</h4>
+							</div>
+							<div class="input-field col s12 center-align">
+								<div class="preloader-wrapper big active">
+									<div class="spinner-layer spinner-blue">
+										<div class="circle-clipper left">
+											<div class="circle"></div>
+										</div><div class="gap-patch">
+										<div class="circle"></div>
+										</div><div class="circle-clipper right">
+										<div class="circle"></div>
+										</div>
+									</div>
+
+									<div class="spinner-layer spinner-red">
+										<div class="circle-clipper left">
+											<div class="circle"></div>
+										</div><div class="gap-patch">
+										<div class="circle"></div>
+										</div><div class="circle-clipper right">
+										<div class="circle"></div>
+										</div>
+									</div>
+
+									<div class="spinner-layer spinner-yellow">
+										<div class="circle-clipper left">
+											<div class="circle"></div>
+										</div><div class="gap-patch">
+										<div class="circle"></div>
+										</div><div class="circle-clipper right">
+										<div class="circle"></div>
+										</div>
+									</div>
+
+									<div class="spinner-layer spinner-green">
+										<div class="circle-clipper left">
+											<div class="circle"></div>
+										</div><div class="gap-patch">
+										<div class="circle"></div>
+										</div><div class="circle-clipper right">
+										<div class="circle"></div>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+					</form>
+				</div>
+    		</div>
+		</div>
+		
+		<!-- get buy signal modal with progress bar -->
+		<div id="modal5" class="modal">
+			<div class="modal-content">
+				<div class="row">
+					<form class="col s12">
+						<div class="row">
+							<div class="input-field col s12">
+								<h4 class="center-align" style="color: #ee6e73; font-weight: 200;">Getting today's signals...</h4>
+							</div>
+							<div class="input-field col s12 center-align">
+								<div class="preloader-wrapper big active">
+									<div class="spinner-layer spinner-blue">
+										<div class="circle-clipper left">
+											<div class="circle"></div>
+										</div><div class="gap-patch">
+										<div class="circle"></div>
+										</div><div class="circle-clipper right">
+										<div class="circle"></div>
+										</div>
+									</div>
+
+									<div class="spinner-layer spinner-red">
+										<div class="circle-clipper left">
+											<div class="circle"></div>
+										</div><div class="gap-patch">
+										<div class="circle"></div>
+										</div><div class="circle-clipper right">
+										<div class="circle"></div>
+										</div>
+									</div>
+
+									<div class="spinner-layer spinner-yellow">
+										<div class="circle-clipper left">
+											<div class="circle"></div>
+										</div><div class="gap-patch">
+										<div class="circle"></div>
+										</div><div class="circle-clipper right">
+										<div class="circle"></div>
+										</div>
+									</div>
+
+									<div class="spinner-layer spinner-green">
+										<div class="circle-clipper left">
+											<div class="circle"></div>
+										</div><div class="gap-patch">
+										<div class="circle"></div>
+										</div><div class="circle-clipper right">
+										<div class="circle"></div>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+					</form>
+				</div>
+    		</div>
+		</div>
+		<!-- Show Portfolio modal and form -->
+		<div id="modal7" class="modal">
+    		<div class="modal-content">
+				<h4 style="color: #ee6e73; font-weight: 200;">Visualize your Degiro portfolio:</h4>
+				<p>You can get your account's transactions from Degiro as csv file and see it here as a graph.</p>
+				<p>To do that, log in to Degiro.se and follow those steps:</p>
+				<div class="row">
+					<div class="col s12 m10">
+						<div class="card">
+            				<div class="card-image">
+								<img src="/public/img/steps.png">
+							</div>
+							<div class="card-content">
+								<p><i class="material-icons" style="vertical-align: middle; margin-right: 1em">done</i>Click the "Konto" tab.</p>
+								<p><i class="material-icons" style="vertical-align: middle; margin-right: 1em">done</i>Change the start date to as early as before you opened the Degiro account.</p>
+								<p><i class="material-icons" style="vertical-align: middle; margin-right: 1em">done</i>Click export "XLS".</p>
+								<p><i class="material-icons" style="vertical-align: middle; margin-right: 1em">done</i>Upload the resulting file here below.</p>
+							</div>
+						</div>
+					</div>
+				</div>
+				
+				<form id="uploadPortfolio" enctype="multipart/form-data">
+					<div class="file-field input-field">
+						<div class="btn">
+							<span>File</span>
+							<input id="portfolioFile" name="file" type="file">
+						</div>
+						<div class="file-path-wrapper" style="width: 25%">
+							<input class="file-path validate" type="text" placeholder="Upload portfolio file">
+						</div>
+						<a id="portfolioBtn" value="Upload" class="waves-effect waves-light btn"><i class="material-icons left">cloud_upload</i>Upload</a>
+					</div>
+				</form>
+
+				
+    		</div>
+			<div class="modal-footer">
+				<a href="#!" class=" modal-action modal-close waves-effect waves-green btn-flat">Cancel</a>
+			</div>
+		</div>
+		<!-- mark Buy and Goodday for history stock modal with progress bar -->
+		<div id="modal6" class="modal">
+			<div class="modal-content">
+				<div class="row">
+					<form class="col s12">
+						<div class="row">
+							<div class="input-field col s12">
+								<h4 class="center-align" style="color: #ee6e73; font-weight: 200;">Analyzing history data...</h4>
+							</div>
+							<div class="input-field col s12 center-align">
+								<div class="preloader-wrapper big active">
+									<div class="spinner-layer spinner-blue">
+										<div class="circle-clipper left">
+											<div class="circle"></div>
+										</div><div class="gap-patch">
+										<div class="circle"></div>
+										</div><div class="circle-clipper right">
+										<div class="circle"></div>
+										</div>
+									</div>
+
+									<div class="spinner-layer spinner-red">
+										<div class="circle-clipper left">
+											<div class="circle"></div>
+										</div><div class="gap-patch">
+										<div class="circle"></div>
+										</div><div class="circle-clipper right">
+										<div class="circle"></div>
+										</div>
+									</div>
+
+									<div class="spinner-layer spinner-yellow">
+										<div class="circle-clipper left">
+											<div class="circle"></div>
+										</div><div class="gap-patch">
+										<div class="circle"></div>
+										</div><div class="circle-clipper right">
+										<div class="circle"></div>
+										</div>
+									</div>
+
+									<div class="spinner-layer spinner-green">
+										<div class="circle-clipper left">
+											<div class="circle"></div>
+										</div><div class="gap-patch">
+										<div class="circle"></div>
+										</div><div class="circle-clipper right">
+										<div class="circle"></div>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+					</form>
+				</div>
+    		</div>
+		</div>
+	</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+

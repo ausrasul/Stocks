@@ -1,0 +1,16 @@
+
+div.info-bar-success{
+	border-color: color("green", "lighten-2") !important;
+	color: color("green", "lighten-2");
+	span {margin-left: 1em};
+}
+div.info-bar-danger{
+	border-color: color("red", "lighten-2") !important;
+	color: color("red", "lighten-2");
+	span {margin-left: 1em};
+}
+div.info-bar-warning{
+	border-color: color("amber", "lighten-2") !important;
+	color: color("amber", "lighten-2");
+	span {margin-left: 1em};
+}

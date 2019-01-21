@@ -1,0 +1,15 @@
+a.txt
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Icon?
+ehthumbs.db
+Thumbs.db
+bin/*
+pkg/*
+src/git*
+src/node_*
+src/go*
+src/.sass*
